@@ -1,166 +1,158 @@
+breed [adults adult]
+breed [children child]
+
 globals [
-  total-households           ; total number of households
   generation-counter         ; keeps track of the generation number
+  initial-population         ; number of foreign speakers to begin with
 ]
 
-turtles-own [
-  number-of-kids             ; number of children in the household
-  num-parents                ; number of parents in the household
-  parent-1-language          ; true if parent 1 speaks the foreign language, false otherwise
-  parent-2-language          ; true if parent 2 speaks the foreign language, false otherwise
-  parent-1-proficiency       ; proficiency level of parent 1 (0 to 1 scale)
-  parent-2-proficiency       ; proficiency level of parent 2 (0 to 1 scale)
-  environmental-factor       ; individual environmental factor for each household (0 to 1 scale)
-  radius-factor              ; individual radius factor for each household (in terms of distance)
-  children-proficiency       ; proficiency level of the children (0 to 1 scale)
+adults-own [
+  proficiency                ; profiency in foreign language
+  im-gen                     ; generation of immigration
+]
+
+patches-own [
+ net-proficiency             ; sum of profiency in the patch (have to divide by 2 to normalize)
+ env-factor                  ; environmental factor
+ radius-factor               ; sum of profiency in neighbouring patches (have to divide by 9 to normalize)
 ]
 
 ; setup the model
 to setup
   clear-all
   set generation-counter 1     ; Start at generation 1
-  set total-households 3       ; Start with 3 initial households
+  set initial-population 2 * 150
 
-  create-turtles total-households [
-    setxy random-xcor random-ycor ; place households randomly
-    set number-of-kids random 6   ; assign 0 to 5 kids
-    set num-parents one-of [1 2]  ; assign 1 or 2 parents randomly
+  ; variables to define number of foreign speakers left to initialize
+  let foreign-to-sprout initial-population
 
-    ; assign parent language proficiency
-    if num-parents = 1 [
-      set parent-1-language true    ; single parent speaks the foreign language
-      set parent-2-language false  ; no second parent
-      set parent-1-proficiency 1   ; the single has proficiency 1
-    ]
-    if num-parents = 2 [
-      let combo one-of ["both-speak" "one-speaks"]
-      if combo = "both-speak" [
-        set parent-1-language true
-        set parent-2-language true
-        set parent-1-proficiency 1
-        set parent-2-proficiency 1
+  ; put people in each patch
+  ask patches [
+    set env-factor random 11 / 10
+
+    ; choose to either initialize a fluent speaker or a local
+    ifelse foreign-to-sprout > 0 [
+      ; sprout two fluent speakers
+      sprout 2 [
+        set breed adults
+        set color 126
+        set proficiency 1
+        set im-gen 1
       ]
-      if combo = "one-speaks" [
-        set parent-1-language true
-        set parent-2-language false
-        set parent-1-proficiency 1
-        set parent-2-proficiency 0
+     ; reduce number of fluent speakers left to sprout
+     set foreign-to-sprout (foreign-to-sprout - 2)
+    ][
+      ; sprout two locals
+      sprout 2 [
+          set breed adults
+          set color 36
+          set proficiency 0
+          set im-gen -1
       ]
+      set net-proficiency 0
     ]
+    ; update net-proficiency, radius factor, house color
+    calculate-net-proficiency
+    calculate-radius-factor
 
-    ; Set random environmental and radius factors
-    set environmental-factor random-float 1
-    set radius-factor (random 11) + 5 ; Random radius between 5 and 15 units
+    ; set environmental factor based on position
+    set-env-factor
+    recolor-household-env
 
-    set color blue ; households start as blue
   ]
-  print-household-info
   reset-ticks
+end
+
+to set-env-factor
+  (ifelse
+    pxcor < 0 and pycor <  0[
+      set env-factor 0
+    ]
+    pxcor >= 0 and pycor <  0[
+      set env-factor 1 / 3
+    ]
+    pxcor >= 0 and pycor >=  0[
+      set env-factor 2 / 3
+    ]
+  ; else
+    [
+      set env-factor 1
+  ])
+end
+
+
+
+; update patch color based on net proficiency
+to recolor-household-proficiency
+    set pcolor 139 - 2 * net-proficiency
+end
+
+; update patch color based on net proficiency
+to recolor-household-env
+    set pcolor 59 - 2 * env-factor
+end
+
+; update patch net proficiency
+to calculate-net-proficiency
+  let new-net-proficiency 0
+  ask adults-here [
+    set new-net-proficiency new-net-proficiency + proficiency
+  ]
+  set net-proficiency new-net-proficiency
+end
+
+; update patch radius factor
+to calculate-radius-factor
+  let new-radius-factor 0
+  ask neighbors [
+            set new-radius-factor new-radius-factor + net-proficiency
+        ]
+  set radius-factor new-radius-factor / ( 8 * 2 )
 end
 
 ; go defines what happens at each step of the simulation
 to go
   create-next-generation
-  print-household-info
   tick ; advance the simulation by one time step
 end
 
 ; create the next generation of households
 to create-next-generation
-  let new-households 0
 
-  ask turtles [
-    if number-of-kids > 0 [
-      let kids number-of-kids
-      repeat kids [
-        hatch 1 [
-          set number-of-kids random 6          ; New households get their own kids
-          set num-parents one-of [1 2]        ; Randomly assign 1 or 2 parents
+  ; create a list of children
+  ; in each patch, spawn new children:
+  ;    # of kids is normal dist (1.5, 1.5)
+  ;    kid profiency = 0.6 * ( p1 + p2 ) / 2 + 0.2 * env + 0.2 * rad
+  ; sprout adults based child data
+  ; delete children
+  ; re calculate patch data
 
-          ; Inherit proficiency from the parent's children-proficiency
-          set parent-1-proficiency [children-proficiency] of myself
-          set parent-1-language (parent-1-proficiency > 0.5) ; Speaks the language if proficiency > 0.5
 
-          if num-parents = 2 [
-            set parent-2-proficiency random-float 1 ; Randomly decide proficiency of second parent
-            set parent-2-language (parent-2-proficiency > 0.5)
-          ]
-          if num-parents = 1 [
-            set parent-2-proficiency 0 ; No second parent
-            set parent-2-language false
-          ]
 
-          ; Calculate children's proficiency influenced by parents' language
-          let proficiency-influence 0
 
-          if parent-1-language and parent-2-language [
-            set proficiency-influence 1 ; Both parents speak the language, high proficiency
-          ]
-          if (parent-1-language and not parent-2-language) or (not parent-1-language and parent-2-language) [
-            set proficiency-influence 0.5 ; One parent speaks the language, moderate proficiency
-          ]
-
-          ; Children proficiency is influenced by environmental and radius factors
-          let environmental-impact (0.25 * environmental-factor)  ; Environmental factor
-          let radius-impact (0.25 * radius-factor)  ; Radius factor
-
-          let total-proficiency (proficiency-influence + environmental-impact + radius-impact) ; Sum of impacts
-          set children-proficiency min (list 1 total-proficiency) ; Children proficiency capped at 1
-
-          setxy random-xcor random-ycor       ; Place new households randomly
-          set color green                     ; Differentiate new households
-        ]
-        set new-households new-households + 1
-      ]
-    ]
-  ]
-
-  ; Update total households and generation counter
-  set total-households total-households + new-households
-  set generation-counter generation-counter + 1
-  print (word "Generation " generation-counter ": " new-households " new households created.")
 end
-
-; print household information
-to print-household-info
-  ask turtles [
-    let household-id who + 1 ; Adjust so the first household is 1, not 0
-    print (word "Household " household-id ": has " number-of-kids " kids, " num-parents " parent(s), "
-      "Parent 1 speaks the foreign language: " parent-1-language ", proficiency: " parent-1-proficiency)
-    if num-parents = 2 [
-      print (word " Parent 2 speaks the foreign language: " parent-2-language ", proficiency: " parent-2-proficiency)
-    ]
-    print (word " Children proficiency: " children-proficiency)
-  ]
-end
-
-
-;; to fix : print households in chronological order and do not re-print older households
-
-
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
 10
-647
-448
+646
+447
 -1
 -1
-13.0
+25.2
 1
 10
 1
 1
 1
 0
+0
+0
 1
-1
-1
--16
-16
--16
-16
+-8
+8
+-8
+8
 0
 0
 1
