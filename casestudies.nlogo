@@ -4,9 +4,19 @@ breed [children child]
 globals [
   generation-counter         ; keeps track of the generation number
   initial-population         ; number of foreign speakers to begin with
+  full-population-size       ; total number of people in community if all houses have 2 parents
+  proficiency-weight         ; weight of avg parent proficiency in pass on calculation
+  env-weight                 ; weight of avg parent proficiency in pass on calculation
+  radius-weight              ; weight of avg parent proficiency in pass on calculation
+  fluent-cutoff              ; value above which someone is fluent
 ]
 
 adults-own [
+  proficiency                ; profiency in foreign language
+  im-gen                     ; generation of immigration
+]
+
+children-own [
   proficiency                ; profiency in foreign language
   im-gen                     ; generation of immigration
 ]
@@ -20,8 +30,16 @@ patches-own [
 ; setup the model
 to setup
   clear-all
+  set proficiency-weight 0.5
+  set radius-weight 0.2
+  set env-weight 1 - ( proficiency-weight + radius-weight )
+
+  set fluent-cutoff 0.7
+
+
   set generation-counter 1     ; Start at generation 1
-  set initial-population 2 * 150
+  set initial-population 2 * 60 ; initial number of immigrants
+  set full-population-size 2 * ( ( 2 * max-pxcor ) + 1 ) * ( ( 2 * max-pycor ) + 1 )
 
   ; variables to define number of foreign speakers left to initialize
   let foreign-to-sprout initial-population
@@ -35,9 +53,9 @@ to setup
       ; sprout two fluent speakers
       sprout 2 [
         set breed adults
-        set color 126
         set proficiency 1
         set im-gen 1
+        recolor-person
       ]
      ; reduce number of fluent speakers left to sprout
      set foreign-to-sprout (foreign-to-sprout - 2)
@@ -45,9 +63,9 @@ to setup
       ; sprout two locals
       sprout 2 [
           set breed adults
-          set color 36
           set proficiency 0
           set im-gen -1
+          recolor-person
       ]
       set net-proficiency 0
     ]
@@ -60,6 +78,9 @@ to setup
     recolor-household-env
 
   ]
+
+  report-avg-proficiency
+  report-num-fluent
   reset-ticks
 end
 
@@ -80,8 +101,10 @@ to set-env-factor
   ])
 end
 
-
-
+; update person color based on proficiency
+to recolor-person
+  set color 129.9 - 4.5 * proficiency
+end
 ; update patch color based on net proficiency
 to recolor-household-proficiency
     set pcolor 139 - 2 * net-proficiency
@@ -113,12 +136,18 @@ end
 ; go defines what happens at each step of the simulation
 to go
   create-next-generation
+  report-avg-proficiency
+  report-num-fluent
   tick ; advance the simulation by one time step
 end
 
 ; create the next generation of households
 to create-next-generation
-
+  birth-children
+  shuffle-children
+  kill-adults
+  grow-children
+  update-patch-data
   ; create a list of children
   ; in each patch, spawn new children:
   ;    # of kids is normal dist (1.5, 1.5)
@@ -127,10 +156,123 @@ to create-next-generation
   ; delete children
   ; re calculate patch data
 
+end
 
+to update-patch-data
+  ask patches [
+    calculate-net-proficiency
+  ]
+
+  ask patches [
+    calculate-radius-factor
+  ]
 
 
 end
+
+to birth-children
+  let total-sprouted 0
+  ask patches [
+    let num-children round ( random-normal 1.9 1.5 )
+
+    set total-sprouted total-sprouted + num-children
+
+    let num-parents count adults-on self
+    let avg-proficiency ( net-proficiency / num-parents )
+
+    let next-im-gen max [im-gen] of adults-on self
+
+    repeat num-children [
+      sprout 1 [
+        set breed children
+        ; need to add in randomness here
+        set proficiency ( ( proficiency-weight * avg-proficiency ) + ( env-weight * env-factor ) + ( radius-weight * radius-factor ) )
+        set im-gen next-im-gen
+        recolor-person
+      ]
+
+    ]
+
+  ]
+
+
+  ; have people move in if not enough babies are made
+  ; assumption is people move in with 0 proficiency
+  if total-sprouted < full-population-size [
+;    print "yes"
+    create-turtles ( full-population-size - total-sprouted ) [
+      set breed children
+      set proficiency 0
+      set im-gen -1
+      recolor-person
+    ]
+  ]
+
+;  print total-sprouted
+
+end
+
+to shuffle-children
+
+  let num-shuffled 0
+
+  let spawn-x min-pxcor
+  let spawn-y min-pycor
+
+  ask children [
+    ; remove excess children
+    if spawn-y > max-pycor [
+      die
+    ]
+
+;    print spawn-x
+;    print spawn-y
+;    print "\n"
+    set xcor spawn-x
+    set ycor spawn-y
+
+
+    ; add two children to each patch
+    if num-shuffled mod 2 = 0 and num-shuffled != 0 [
+       set spawn-x spawn-x + 1
+      ; if the edge of the board is reached, go to next row
+      if spawn-x > max-pxcor [
+        set spawn-x min-pxcor
+        set spawn-y spawn-y + 1
+      ]
+    ]
+
+
+
+
+    set num-shuffled num-shuffled + 1
+
+
+  ]
+
+end
+
+
+
+to kill-adults
+  ask adults [ die ]
+end
+
+to grow-children
+  ask children [
+    set breed adults
+  ]
+end
+
+
+to report-avg-proficiency
+  print mean [proficiency] of adults
+end
+
+to report-num-fluent
+  print count adults with [ proficiency > fluent-cutoff ]
+end
+
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
