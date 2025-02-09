@@ -468,11 +468,6 @@ to report-num-fluent
   print (word "Number of Fluent Adults: " count adults with [ proficiency > fluent-cutoff ])
 end
 
-
-
-; TODO
-; Keep people in their neighbourhood
-; Add sliders
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
@@ -534,6 +529,24 @@ NIL
 NIL
 NIL
 1
+
+PLOT
+661
+10
+934
+168
+Average Proficiency of Adults over Time
+Generations
+Avg Proficiency
+0.0
+10.0
+0.0
+1.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot mean [proficiency] of adults"
 
 @#$#@#$#@
 ## WHAT IS IT?
