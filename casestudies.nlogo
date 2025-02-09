@@ -34,7 +34,7 @@ patches-own [
 ; setup the model
 to setup
   clear-all
-  set proficiency-weight 0.8
+  set proficiency-weight 0.7
   set radius-weight 0.1
   set env-weight 1 - ( proficiency-weight + radius-weight )
 
@@ -45,7 +45,7 @@ to setup
 
 
   set generation-counter 1     ; Start at generation 1
-  set initial-population 2 * 100 ; initial number of immigrants
+  set initial-population 2 * 200 ; initial number of immigrants
   set full-population-size 2 * ( ( 2 * max-pxcor ) + 1 ) * ( ( 2 * max-pycor ) + 1 )
 
   set neighbourhood-size 3
@@ -200,7 +200,7 @@ to create-next-generation
   grow-children
   disperse-adults
   update-patch-data
-  print count adults
+
 
   ; create a list of children
   ; in each patch, spawn new children:
@@ -467,7 +467,6 @@ end
 to report-num-fluent
   print (word "Number of Fluent Adults: " count adults with [ proficiency > fluent-cutoff ])
 end
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
@@ -531,10 +530,10 @@ NIL
 1
 
 PLOT
-661
-10
-934
-168
+860
+14
+1133
+172
 Average Proficiency of Adults over Time
 Generations
 Avg Proficiency
@@ -547,6 +546,41 @@ false
 "" ""
 PENS
 "default" 1.0 0 -16777216 true "" "plot mean [proficiency] of adults"
+
+PLOT
+859
+189
+1136
+339
+Number of Fluent Speakers over Time
+NIL
+NIL
+0.0
+10.0
+0.0
+578.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot count adults with [proficiency > fluent-cutoff]"
+
+BUTTON
+114
+146
+176
+179
+go (10)
+repeat 10 [go]
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
