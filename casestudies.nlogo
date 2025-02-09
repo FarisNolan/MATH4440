@@ -9,6 +9,10 @@ globals [
   env-weight                 ; weight of avg parent proficiency in pass on calculation
   radius-weight              ; weight of avg parent proficiency in pass on calculation
   fluent-cutoff              ; value above which someone is fluent
+  influx-prob                ; 1 - probability that incoming person is immgrating
+  env-factor-list            ; list of environmental factors for each quadrant
+  dispersal-factor           ; percentage of adults to randomly disperse at each time steps
+  neighbourhood-size         ; size of square which people move within
 ]
 
 adults-own [
@@ -30,23 +34,27 @@ patches-own [
 ; setup the model
 to setup
   clear-all
-  set proficiency-weight 0.5
-  set radius-weight 0.2
+  set proficiency-weight 0.8
+  set radius-weight 0.1
   set env-weight 1 - ( proficiency-weight + radius-weight )
 
   set fluent-cutoff 0.7
+  set influx-prob 0.9
+  set env-factor-list (list 0  ( 1 / 3 )  ( 2 / 3 )  1 )
+  set dispersal-factor 0.05
 
 
   set generation-counter 1     ; Start at generation 1
-  set initial-population 2 * 60 ; initial number of immigrants
+  set initial-population 2 * 100 ; initial number of immigrants
   set full-population-size 2 * ( ( 2 * max-pxcor ) + 1 ) * ( ( 2 * max-pycor ) + 1 )
+
+  set neighbourhood-size 3
 
   ; variables to define number of foreign speakers left to initialize
   let foreign-to-sprout initial-population
 
   ; put people in each patch
   ask patches [
-    set env-factor random 11 / 10
 
     ; choose to either initialize a fluent speaker or a local
     ifelse foreign-to-sprout > 0 [
@@ -87,17 +95,17 @@ end
 to set-env-factor
   (ifelse
     pxcor < 0 and pycor <  0[
-      set env-factor 0
+      set  env-factor item 0 env-factor-list
     ]
     pxcor >= 0 and pycor <  0[
-      set env-factor 1 / 3
+      set env-factor item 1 env-factor-list
     ]
     pxcor >= 0 and pycor >=  0[
-      set env-factor 2 / 3
+      set env-factor item 2 env-factor-list
     ]
   ; else
     [
-      set env-factor 1
+      set env-factor item 3 env-factor-list
   ])
 end
 
@@ -133,6 +141,48 @@ to calculate-radius-factor
   set radius-factor new-radius-factor / ( 8 * 2 )
 end
 
+; randomly swap the correct number of adults on the grid according to the global variable dispersal-factor
+to disperse-adults
+  let n-to-disperse round ( dispersal-factor * count adults )
+  while [ n-to-disperse > 0 ] [
+    rand-swap
+    set n-to-disperse n-to-disperse - 1
+  ]
+end
+; randomly swap two adults on the grid
+to rand-swap
+  let adult-list [self] of adults
+  let adult-1 item 0 adult-list
+  let adult-1-x [xcor] of adult-1
+  let adult-1-y [ycor] of adult-1
+
+  let adult-2 item 1 adult-list
+  let adult-2-x [xcor] of adult-2
+  let adult-2-y [ycor] of adult-2
+
+  ask adult-1 [ setxy adult-2-x adult-2-y ]
+  ask adult-2 [ setxy adult-1-x adult-1-y ]
+end
+
+; update environmental factors
+to update-env-factor
+  let quad-1 ( mean [net-proficiency] of patches with [pxcor < 0 and pycor <  0] ) / ( full-population-size / 4 )
+
+  let quad-2 ( mean [net-proficiency] of patches with [ pxcor >= 0 and pycor <  0] ) / ( full-population-size / 4 )
+  set quad-2 quad-2 + ( random-float 1 ) / 10
+  if quad-2 > 1 [ set quad-2 1 ]
+
+  let quad-3 ( mean [net-proficiency] of patches with [  pxcor >= 0 and pycor >=  0] ) / ( full-population-size / 4 )
+  set quad-3 quad-3 + ( random-float 1 ) / 6
+  if quad-3 > 1 [ set quad-3 1 ]
+
+  let quad-4 ( mean [net-proficiency] of patches with [  pxcor < 0 and pycor >=  0] ) / ( full-population-size / 4 )
+  set quad-4 quad-4 + ( random-float 1 ) / 3
+  if quad-4 > 1 [ set quad-4 1 ]
+
+  set env-factor-list (list quad-1 quad-2 quad-3 quad-4 )
+end
+
 ; go defines what happens at each step of the simulation
 to go
   create-next-generation
@@ -143,11 +193,15 @@ end
 
 ; create the next generation of households
 to create-next-generation
-  birth-children
-  shuffle-children
+;  birth-children-in-grid  -8 -8 8 8
+;  shuffle-children-in-grid  -8 -8 8 8
+  loop-over-neighbourhoods
   kill-adults
   grow-children
+  disperse-adults
   update-patch-data
+  print count adults
+
   ; create a list of children
   ; in each patch, spawn new children:
   ;    # of kids is normal dist (1.5, 1.5)
@@ -167,11 +221,17 @@ to update-patch-data
     calculate-radius-factor
   ]
 
+  update-env-factor
+  ask patches [
+    set-env-factor
+    recolor-household-env
+  ]
 
 end
 
 to birth-children
   let total-sprouted 0
+
   ask patches [
     let num-children round ( random-normal 1.9 1.5 )
 
@@ -181,11 +241,11 @@ to birth-children
     let avg-proficiency ( net-proficiency / num-parents )
 
     let next-im-gen max [im-gen] of adults-on self
+    set next-im-gen next-im-gen + 1
 
     repeat num-children [
       sprout 1 [
         set breed children
-        ; need to add in randomness here
         set proficiency ( ( proficiency-weight * avg-proficiency ) + ( env-weight * env-factor ) + ( radius-weight * radius-factor ) )
         set im-gen next-im-gen
         recolor-person
@@ -195,20 +255,154 @@ to birth-children
 
   ]
 
-
   ; have people move in if not enough babies are made
   ; assumption is people move in with 0 proficiency
   if total-sprouted < full-population-size [
 ;    print "yes"
     create-turtles ( full-population-size - total-sprouted ) [
       set breed children
-      set proficiency 0
-      set im-gen -1
+      let is-immigrant random-float 1
+      ifelse is-immigrant >= influx-prob [
+        set proficiency 1
+        set im-gen 1
+      ] [
+        set proficiency 0
+        set im-gen -1
+      ]
+
+
       recolor-person
     ]
   ]
 
+
 ;  print total-sprouted
+
+end
+
+; generates min and max coords for neighbourhoods
+; put functions within loop to execute at each neighbourhood
+to loop-over-neighbourhoods
+  let min-x min-pxcor
+  let min-y min-pycor
+  let max-x min-x + neighbourhood-size - 1
+  let max-y min-y + neighbourhood-size - 1
+
+  while [min-y <= max-pycor] [
+    while [min-x <= max-pxcor] [
+
+      ; LOOP BLOCK
+      ; COORDS : min-x, min-y, max-x, max-y
+      birth-children-in-grid min-x min-y max-x max-y
+      shuffle-children-in-grid min-x min-y max-x max-y
+;
+;      print ( word "MIN X: " min-x " MIN Y: " min-y )
+;      print ( word "MAX X: " max-x " MAX Y: "max-y )
+
+      set min-x min-x + neighbourhood-size
+      set max-x max-x + neighbourhood-size
+      if max-x > max-pxcor [ set max-x max-pxcor ]
+     ]
+    set min-x min-pxcor
+    set max-x min-x + neighbourhood-size - 1
+
+    set min-y min-y + neighbourhood-size
+    set max-y max-y + neighbourhood-size
+    if max-y > max-pxcor [ set max-y max-pxcor ]
+  ]
+
+
+end
+
+; birth children within grid (inclusive on endpoints)
+to birth-children-in-grid [min-x min-y max-x max-y]
+  let total-sprouted 0
+
+  ask patches with [pxcor >= min-x and pycor >= min-y and pxcor <= max-x and pycor <= max-y][
+    let num-children round ( random-normal 1.9 1.5 )
+
+    set total-sprouted total-sprouted + num-children
+
+    let num-parents count adults-on self
+    let avg-proficiency ( net-proficiency / num-parents )
+
+    let next-im-gen max [im-gen] of adults-on self
+    set next-im-gen next-im-gen + 1
+
+    repeat num-children [
+      sprout 1 [
+        set breed children
+        set proficiency ( ( proficiency-weight * avg-proficiency ) + ( env-weight * env-factor ) + ( radius-weight * radius-factor ) )
+        set im-gen next-im-gen
+        recolor-person
+      ]
+
+    ]
+
+  ]
+
+  ; have people move in if not enough babies are made
+  ; assumption is people move in with 0 proficiency
+  let full-grid-population ((max-x - min-x) + 1) * ((max-y - min-y) + 1) * 2
+  if total-sprouted < full-grid-population [
+;    print "yes"
+    create-turtles ( full-grid-population - total-sprouted ) [
+      set breed children
+      set xcor ( min-x + max-x ) / 2
+      set ycor ( min-y + max-y ) / 2
+      let is-immigrant random-float 1
+      ifelse is-immigrant >= influx-prob [
+        set proficiency 1
+        set im-gen 1
+      ] [
+        set proficiency 0
+        set im-gen -1
+      ]
+
+
+      recolor-person
+    ]
+  ]
+
+
+;  print total-sprouted
+
+end
+
+
+
+; shuffle children within grid (inclusive on endpoints)
+to shuffle-children-in-grid [min-x min-y max-x max-y]
+  let num-shuffled 0
+
+  let spawn-x min-x
+  let spawn-y min-y
+
+  ask children with [xcor >= min-x and ycor >= min-y and xcor <= max-x and ycor <= max-y][
+    ; remove excess children
+    if spawn-y > max-y [
+      die
+    ]
+
+;    print spawn-x
+;    print spawn-y
+;    print "\n"
+    set xcor spawn-x
+    set ycor spawn-y
+
+    set num-shuffled num-shuffled + 1
+
+    ; add two children to each patch
+    if num-shuffled mod 2 = 0 and num-shuffled != 0 [
+       set spawn-x spawn-x + 1
+      ; if the edge of the board is reached, go to next row
+      if spawn-x > max-x [
+        set spawn-x min-x
+        set spawn-y spawn-y + 1
+      ]
+    ]
+
+  ]
 
 end
 
@@ -231,6 +425,7 @@ to shuffle-children
     set xcor spawn-x
     set ycor spawn-y
 
+    set num-shuffled num-shuffled + 1
 
     ; add two children to each patch
     if num-shuffled mod 2 = 0 and num-shuffled != 0 [
@@ -245,7 +440,7 @@ to shuffle-children
 
 
 
-    set num-shuffled num-shuffled + 1
+
 
 
   ]
@@ -266,21 +461,22 @@ end
 
 
 to report-avg-proficiency
-  print mean [proficiency] of adults
+  print (word "Average Proficiency: " mean [proficiency] of adults)
 end
 
 to report-num-fluent
-  print count adults with [ proficiency > fluent-cutoff ]
+  print (word "Number of Fluent Adults: " count adults with [ proficiency > fluent-cutoff ])
 end
+
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
 10
-646
-447
+832
+633
 -1
 -1
-25.2
+36.12
 1
 10
 1
