@@ -3,7 +3,7 @@ breed [children child]
 
 globals [
   generation-counter         ; keeps track of the generation number
-  initial-population         ; number of foreign speakers to begin with
+  ;initial-population         ; number of foreign speakers to begin with
   full-population-size       ; total number of people in community if all houses have 2 parents
   proficiency-weight         ; weight of avg parent proficiency in pass on calculation
   env-weight                 ; weight of avg parent proficiency in pass on calculation
@@ -45,7 +45,7 @@ to setup
 
 
   set generation-counter 1     ; Start at generation 1
-  set initial-population 2 * 200 ; initial number of immigrants
+  ;set initial-population 2 * 200 ; initial number of immigrants
   set full-population-size 2 * ( ( 2 * max-pxcor ) + 1 ) * ( ( 2 * max-pycor ) + 1 )
 
   set neighbourhood-size 3
@@ -582,6 +582,21 @@ NIL
 NIL
 1
 
+SLIDER
+23
+260
+195
+293
+initial-population
+initial-population
+0
+500
+410.0
+10
+1
+NIL
+HORIZONTAL
+
 @#$#@#$#@
 ## WHAT IS IT?
 
@@ -928,6 +943,15 @@ NetLogo 6.4.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="init-pov variation" repetitions="6" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <exitCondition>ticks = 15</exitCondition>
+    <metric>mean [proficiency] of adults</metric>
+    <steppedValueSet variable="initial-population" first="100" step="50" last="500"/>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default
