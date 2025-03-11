@@ -8,6 +8,7 @@ globals [
   proficiency-weight         ; weight of avg parent proficiency in pass on calculation
   env-weight                 ; weight of avg parent proficiency in pass on calculation
   radius-weight              ; weight of avg parent proficiency in pass on calculation
+  grandparent-weight         ; weight of grandparent
   fluent-cutoff              ; value above which someone is fluent
   influx-prob                ; 1 - probability that incoming person is immgrating
   env-factor-list            ; list of environmental factors for each quadrant
@@ -17,11 +18,13 @@ globals [
 
 adults-own [
   proficiency                ; profiency in foreign language
+  parent-proficiency         ; avg profiency of parents
   im-gen                     ; generation of immigration
 ]
 
 children-own [
   proficiency                ; profiency in foreign language
+  parent-proficiency         ; avg profiency of parents
   im-gen                     ; generation of immigration
 ]
 
@@ -29,14 +32,16 @@ patches-own [
  net-proficiency             ; sum of profiency in the patch (have to divide by 2 to normalize)
  env-factor                  ; environmental factor
  radius-factor               ; sum of profiency in neighbouring patches (have to divide by 9 to normalize)
+ has-grandparents            ; 1=grandparents in household, 0 otherwise. (not specific to number of grandparents its just yes or no)
 ]
 
 ; setup the model
 to setup
   clear-all
-  set proficiency-weight 0.7
-  set radius-weight 0.1
-  set env-weight 1 - ( proficiency-weight + radius-weight )
+  set proficiency-weight 0.5
+  set radius-weight 0.15
+  set grandparent-weight 0.25
+  set env-weight 1 - ( proficiency-weight + radius-weight + grandparent-weight )
 
   set fluent-cutoff 0.7
   set influx-prob 0.9
@@ -45,8 +50,8 @@ to setup
 
 
   set generation-counter 1     ; Start at generation 1
-  set initial-population 2 * 200 ; initial number of immigrants
   set full-population-size 2 * ( ( 2 * max-pxcor ) + 1 ) * ( ( 2 * max-pycor ) + 1 )
+  set initial-population full-population-size / 2 ; initial number of immigrants
 
   set neighbourhood-size 3
 
@@ -77,6 +82,13 @@ to setup
       ]
       set net-proficiency 0
     ]
+
+    ifelse random-float 1 < 0.35 [
+      set has-grandparents 1
+    ] [
+      set has-grandparents 0
+    ]
+
     ; update net-proficiency, radius factor, house color
     calculate-net-proficiency
     calculate-radius-factor
@@ -87,8 +99,8 @@ to setup
 
   ]
 
-  report-avg-proficiency
-  report-num-fluent
+  report-avg-proficiency-raw
+;  report-num-fluent
   reset-ticks
 end
 
@@ -186,8 +198,8 @@ end
 ; go defines what happens at each step of the simulation
 to go
   create-next-generation
-  report-avg-proficiency
-  report-num-fluent
+  report-avg-proficiency-raw
+;  report-num-fluent
   tick ; advance the simulation by one time step
 end
 
@@ -233,6 +245,7 @@ to birth-children
   let total-sprouted 0
 
   ask patches [
+
     let num-children round ( random-normal 1.9 1.5 )
 
     set total-sprouted total-sprouted + num-children
@@ -240,14 +253,38 @@ to birth-children
     let num-parents count adults-on self
     let avg-proficiency ( net-proficiency / num-parents )
 
+    let grandparent-proficiency [ parent-proficiency ] of one-of adults-on self
+
+    let household-has-grandparents has-grandparents
+
     let next-im-gen max [im-gen] of adults-on self
     set next-im-gen next-im-gen + 1
 
     repeat num-children [
       sprout 1 [
         set breed children
-        set proficiency ( ( proficiency-weight * avg-proficiency ) + ( env-weight * env-factor ) + ( radius-weight * radius-factor ) )
-        set im-gen next-im-gen
+        ; Compute proficiency : if grandparents are in the household then children will be influenced
+
+        ifelse household-has-grandparents = 1 [
+           set proficiency ( ( proficiency-weight * avg-proficiency )
+                        + ( env-weight * env-factor )
+                        + ( radius-weight * radius-factor )
+                        + ( grandparent-weight * grandparent-proficiency) )
+
+          set parent-proficiency avg-proficiency
+          set im-gen next-im-gen
+
+
+        ] [
+
+          set proficiency ( ( proficiency-weight * avg-proficiency )
+                        + ( env-weight * env-factor )
+                        + ( radius-weight * radius-factor )) / ( 1 - grandparent-weight )
+          set parent-proficiency avg-proficiency
+          set im-gen next-im-gen
+
+        ]
+
         recolor-person
       ]
 
@@ -264,9 +301,11 @@ to birth-children
       let is-immigrant random-float 1
       ifelse is-immigrant >= influx-prob [
         set proficiency 1
+        set parent-proficiency 1
         set im-gen 1
       ] [
         set proficiency 0
+        set parent-proficiency 0
         set im-gen -1
       ]
 
@@ -326,14 +365,38 @@ to birth-children-in-grid [min-x min-y max-x max-y]
     let num-parents count adults-on self
     let avg-proficiency ( net-proficiency / num-parents )
 
+    let grandparent-proficiency [ parent-proficiency ] of one-of adults-on self
+
+    let household-has-grandparents has-grandparents
+
     let next-im-gen max [im-gen] of adults-on self
     set next-im-gen next-im-gen + 1
 
     repeat num-children [
       sprout 1 [
         set breed children
-        set proficiency ( ( proficiency-weight * avg-proficiency ) + ( env-weight * env-factor ) + ( radius-weight * radius-factor ) )
-        set im-gen next-im-gen
+        ; Compute proficiency : if grandparents are in the household then children will be influenced
+
+        ifelse household-has-grandparents = 1 [
+           set proficiency ( ( proficiency-weight * avg-proficiency )
+                        + ( env-weight * env-factor )
+                        + ( radius-weight * radius-factor )
+                        + ( grandparent-weight * grandparent-proficiency) )
+
+          set parent-proficiency avg-proficiency
+          set im-gen next-im-gen
+
+
+        ] [
+
+          set proficiency ( ( proficiency-weight * avg-proficiency )
+                        + ( env-weight * env-factor )
+                        + ( radius-weight * radius-factor )) / ( 1 - grandparent-weight )
+          set parent-proficiency avg-proficiency
+          set im-gen next-im-gen
+
+        ]
+
         recolor-person
       ]
 
@@ -459,6 +522,9 @@ to grow-children
   ]
 end
 
+to report-avg-proficiency-raw
+  print mean [proficiency] of adults
+end
 
 to report-avg-proficiency
   print (word "Average Proficiency: " mean [proficiency] of adults)
@@ -471,11 +537,11 @@ end
 GRAPHICS-WINDOW
 210
 10
-832
-633
+784
+585
 -1
 -1
-36.12
+18.26
 1
 10
 1
@@ -485,10 +551,10 @@ GRAPHICS-WINDOW
 0
 0
 1
--8
-8
--8
-8
+-15
+15
+-15
+15
 0
 0
 1
@@ -928,6 +994,14 @@ NetLogo 6.4.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="experiment" repetitions="10" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="10"/>
+    <metric>mean [proficiency] of adults</metric>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default
