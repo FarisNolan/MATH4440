@@ -1001,7 +1001,7 @@ NetLogo 6.4.0
     <timeLimit steps="10"/>
     <metric>mean [proficiency] of adults</metric>
   </experiment>
-  <experiment name="proficiency sensitivity" repetitions="1" runMetricsEveryStep="true">
+  <experiment name="proficiency sensitivity" repetitions="10" runMetricsEveryStep="true">
     <setup>setup
 
 let other-weights  ( ( 1 - proficiency-weight ) / 3 )
@@ -1009,6 +1009,7 @@ set radius-weight other-weights
 set grandparent-weight other-weights
 set env-weight other-weights</setup>
     <go>go</go>
+    <timeLimit steps="10"/>
     <metric>count adults with [ proficiency &gt; fluent-cutoff ]</metric>
     <steppedValueSet variable="proficiency-weight" first="0" step="0.05" last="1"/>
   </experiment>
