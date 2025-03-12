@@ -37,11 +37,12 @@ patches-own [
 
 ; setup the model
 to setup
-  clear-all
+;  clear-all
 ;  set proficiency-weight 0.5
 ;  set radius-weight 0.15
 ;  set grandparent-weight 0.25
 ;  set env-weight 1 - ( proficiency-weight + radius-weight + grandparent-weight )
+
 
   set fluent-cutoff 0.7
   set influx-prob 0.9
@@ -198,7 +199,7 @@ end
 ; go defines what happens at each step of the simulation
 to go
   create-next-generation
-  report-avg-proficiency-raw
+;  report-avg-proficiency-raw
 ;  report-num-fluent
   tick ; advance the simulation by one time step
 end
@@ -995,15 +996,9 @@ NetLogo 6.4.0
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="experiment" repetitions="10" runMetricsEveryStep="true">
-    <setup>setup</setup>
-    <go>go</go>
-    <timeLimit steps="10"/>
-    <metric>mean [proficiency] of adults</metric>
-  </experiment>
   <experiment name="proficiency sensitivity" repetitions="10" runMetricsEveryStep="true">
     <setup>setup
-
+print ( proficiency-weight )
 let other-weights  ( ( 1 - proficiency-weight ) / 3 )
 set radius-weight other-weights
 set grandparent-weight other-weights
