@@ -38,9 +38,9 @@ patches-own [
 ; setup the model
 to setup
 ;  clear-all
-;  set proficiency-weight 0.5
-;  set radius-weight 0.15
-;  set grandparent-weight 0.25
+   set proficiency-weight 0.5
+   set radius-weight 0.15
+   set grandparent-weight 0.25
 ;  set env-weight 1 - ( proficiency-weight + radius-weight + grandparent-weight )
 
 
@@ -1007,6 +1007,38 @@ set env-weight other-weights</setup>
     <timeLimit steps="10"/>
     <metric>count adults with [ proficiency &gt; fluent-cutoff ]</metric>
     <steppedValueSet variable="proficiency-weight" first="0" step="0.05" last="1"/>
+  </experiment>
+  <experiment name="environment sensitivity" repetitions="10" runMetricsEveryStep="true">
+    <setup>setup
+;print ( proficiency-weight )
+let other-weights  ( ( 1 - env-weight ) / 3 )
+set radius-weight other-weights
+set grandparent-weight other-weights
+set proficiency-weight other-weights</setup>
+    <go>go</go>
+    <postRun>clear-all</postRun>
+    <exitCondition>ticks=10</exitCondition>
+    <metric>count adults with [ proficiency &gt; fluent-cutoff ]</metric>
+    <metric>mean [proficiency] of adults</metric>
+    <steppedValueSet variable="env-weight" first="0" step="0.05" last="1"/>
+  </experiment>
+  <experiment name="env-sensitivity-v2" repetitions="10" runMetricsEveryStep="true">
+    <setup>setup
+print ( proficiency-weight )
+let other-weights (radius-weight + grandparent-weight + proficiency-weight)
+let scale-factor (1 + ((1 - other-weights - env-weight) / other-weights))
+set radius-weight (radius-weight * scale-factor)
+set grandparent-weight (grandparent-weight * scale-factor)
+set proficiency-weight (proficiency-weight * scale-factor)</setup>
+    <go>go</go>
+    <postRun>clear-all</postRun>
+    <exitCondition>ticks = 10</exitCondition>
+    <metric>count adults with [ proficiency &gt; fluent-cutoff ]</metric>
+    <metric>mean [proficiency] of adults</metric>
+    <metric>radius-weight</metric>
+    <metric>grandparent-weight</metric>
+    <metric>proficiency-weight</metric>
+    <steppedValueSet variable="env-weight" first="0.05" step="0.005" last="0.15"/>
   </experiment>
 </experiments>
 @#$#@#$#@
